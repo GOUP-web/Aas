@@ -12,7 +12,6 @@ jobs:
     timeout-minutes: 350
 
     steps:
-
       - name: Checkout Repo
         uses: actions/checkout@v3
 
@@ -29,12 +28,23 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Install ReconFTW
+      - name: Cache ReconFTW
+        uses: actions/cache@v4
+        with:
+          path: reconftw
+          key: ${{ runner.os }}-reconftw-${{ hashFiles('reconftw/install.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-reconftw
+
+      - name: Install ReconFTW (if not cached)
         run: |
-          git clone --depth 1 https://github.com/six2dez/reconftw.git
-          cd reconftw
-          chmod +x install.sh
-          ./install.sh
+          if [ ! -d "reconftw" ]; then
+            git clone --depth 1 https://github.com/six2dez/reconftw.git
+            cd reconftw
+            chmod +x install.sh
+            ./install.sh
+            cd ..
+          fi
 
       # Notify Telegram that recon has started
       - name: Telegram — Recon Started
@@ -43,7 +53,7 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d parse_mode="Markdown" \
-            -d text="🚀 *ReconFTW Started*\n\n          📋 *Targets:* \`${TARGETS}\`\n          🔧 *Run ID:* \`${{ github.run_id }}\`\n          ⏱️ *Time:* $(date -u '+%Y-%m-%d %H:%M UTC')"
+            -d text="🚀 *ReconFTW Started*\n\n📋 *Targets:* \`${TARGETS}\`\n🔧 *Run ID:* \`${{ github.run_id }}\`\n⏱️ *Time:* $(date -u '+%Y-%m-%d %H:%M UTC')"
 
       - name: Run ReconFTW on All Targets
         run: |
@@ -61,7 +71,7 @@ jobs:
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
               -d parse_mode="Markdown" \
-              -d text="🔍 *Scanning:* \`${target}\``
+              -d text="🔍 *Scanning:* \`${target}\`"
 
             ./reconftw.sh -d "$target" -r --no-commit 2>&1 | tee -a "../results/${target}_recon.log" || true
 
@@ -73,7 +83,7 @@ jobs:
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
               -d parse_mode="Markdown" \
-              -d text="✅ *Done:* \`${target}\`\n          \n          📊 *Quick Stats:*\n          • Subdomain hits in log: \`${SUBDOMAINS}\`\n          • URL hits in log: \`${URLS}\``
+              -d text="✅ *Done:* \`${target}\`\n\n📊 *Quick Stats:*\n• Subdomain hits in log: \`${SUBDOMAINS}\`\n• URL hits in log: \`${URLS}\`"
 
             # Send the log file directly to Telegram (if under 50MB)
             LOGFILE="../results/${target}_recon.log"
@@ -110,4 +120,4 @@ jobs:
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d parse_mode="Markdown" \
-            -d text="🏁 *ReconFTW Complete!*\n          \n          📦 Download all results here:\n          [GitHub Actions Run](${RUN_URL})\n          \n          ⏱️ Finished: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            -d text="🏁 *ReconFTW Complete!*\n\n📦 Download all results here:\n[GitHub Actions Run](${RUN_URL})\n\n⏱️ Finished: $(date -u '+%Y-%m-%d %H:%M UTC')"
