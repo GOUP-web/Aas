@@ -46,7 +46,14 @@ jobs:
             cd ..
           fi
 
-      # Notify Telegram that recon has started
+      # Disable slow modules, keep GXSS and BRUTESPRAY
+      - name: Configure ReconFTW
+        run: |
+          cd reconftw
+          sed -i 's/SUBBRUTE=true/SUBBRUTE=false/' reconftw.cfg
+          sed -i 's/GOTATOR=true/GOTATOR=false/' reconftw.cfg
+          sed -i 's/S3SCANNER=true/S3SCANNER=false/' reconftw.cfg
+
       - name: Telegram — Recon Started
         run: |
           TARGETS=$(cat target.txt | grep -v '^#' | grep -v '^$' | tr '\n' ', ')
@@ -67,25 +74,21 @@ jobs:
             echo "  Starting recon on: $target"
             echo "==============================="
 
-            # Notify per-target start
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
               -d parse_mode="Markdown" \
               -d text="🔍 *Scanning:* \`${target}\`"
 
-            ./reconftw.sh -d "$target" -r --no-commit 2>&1 | tee -a "../results/${target}_recon.log" || true
+            ./reconftw.sh -d "$target" -r 2>&1 | tee -a "../results/${target}_recon.log" || true
 
-            # Count findings from log
             SUBDOMAINS=$(grep -c "subdomain" "../results/${target}_recon.log" 2>/dev/null || echo "0")
             URLS=$(grep -c "http" "../results/${target}_recon.log" 2>/dev/null || echo "0")
 
-            # Send summary for this target
             curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
               -d parse_mode="Markdown" \
               -d text="✅ *Done:* \`${target}\`\n\n📊 *Quick Stats:*\n• Subdomain hits in log: \`${SUBDOMAINS}\`\n• URL hits in log: \`${URLS}\`"
 
-            # Send the log file directly to Telegram (if under 50MB)
             LOGFILE="../results/${target}_recon.log"
             FILESIZE=$(stat -c%s "$LOGFILE" 2>/dev/null || echo 0)
 
@@ -112,7 +115,6 @@ jobs:
             reconftw/Recon/
           retention-days: 30
 
-      # Final Telegram message with artifact link
       - name: Telegram — All Done
         if: always()
         run: |
